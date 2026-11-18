@@ -1,18 +1,40 @@
-# Báo cáo Day 09 — <Họ và tên>, <MSHV>
-
-> Xoá mọi `TODO(học viên)` và dòng gợi ý. Mỗi ý trả lời bằng **số lấy từ `submission/reports/`**, kèm mẫu số. Cả báo cáo ~1–2 trang.
+# Báo cáo Day 09 — Vũ Tuyết Trinh, 2A202603164
 
 ## 1. Kết luận trước
-TODO(học viên): pipeline kết luận **Release / Hold / Rework**? Bao nhiêu ảnh vào, bao nhiêu ảnh ra dataset? Lý do chính (1–3 câu).
+Pipeline kết luận **HOLD** (mã thoát 10). Vào **224** ảnh; cửa vào loại **22** ảnh (hỏng, sai cỡ, trùng, rò rỉ test); dataset `clean_v1` xuất ra **202** ảnh dưới dạng **bản nháp, chưa phát hành**.
+
+Lý do: không còn lỗi bắt buộc nào (0 ERROR sau người duyệt), nhưng **38/202 ảnh (18,8%)** còn cảnh báo chưa được người xem, vượt ngưỡng 10%. Hàng đợi duyệt có **125 ảnh**, mà ngân sách chỉ có **80**.
 
 ## 2. Lỗi và phân việc
-Lấy từ `02_error_list_v1` (gom theo mã lỗi). Cột "ai sửa": **máy** (autofix) hay **người** (hàng đợi); chỉ ghi những mã có mặt trong lô của bạn.
+Số liệu từ `02_error_list_v1.csv` (trước khi sửa; dạng "số issue / số ảnh").
 
 | Mã lỗi | Số ảnh/dòng | Ai sửa (máy/người) | Vì sao |
 |---|---:|---|---|
-| TODO(học viên) | | | |
+| DUP_IMAGE_EXACT | 8 ảnh | máy (loại ở cửa vào) | md5 trùng, chắc chắn là bản sao |
+| DUP_IMAGE_NEAR | 4 ảnh | máy (loại ở cửa vào) | phash ≤ 10; đã mở xem, các cặp đều trùng thật (cắt/đổi màu) |
+| LEAK_TEST | 5 ảnh | máy (loại ở cửa vào) | trùng ảnh test/gold_val; giữ lại sẽ làm số đo cuối bị thổi phồng |
+| CORRUPT_IMAGE | 2 ảnh | máy (loại ở cửa vào) | ảnh không mở được |
+| BAD_SIZE | 3 ảnh | máy (loại ở cửa vào) | cạnh < 250 px (quy tắc dự án) |
+| BAD_CLASS_NAME | 1 file (2 tên) | máy (`rename_classes`) | `data.yaml` ghi `Person`, `Bus`; quy tắc đã cố định là `cfg.classes` |
+| BAD_CLASS_ID | 6 dòng / 6 ảnh | máy (`drop_line`) | ID lạ (-1, 4, 7, 93): không đoán được lớp đúng nên xoá dòng |
+| BAD_FORMAT | 3 dòng / 3 ảnh | máy (`drop_line`) | không đúng 5 cột số |
+| BOX_ZERO | 4 dòng / 4 ảnh | máy (`drop_line`) | box w hoặc h ≤ 0 |
+| DUP_BOX | 7 dòng / 7 ảnh | máy (`drop_line`) | cùng lớp, IoU > 0,9 với dòng trước |
+| BOX_OUT_OF_IMAGE | 8 dòng / 8 ảnh | máy (`clip_box`) | cắt về [0,1], giữ lớp |
+| MISSING_LABEL_FILE | 6 ảnh | **người** (`needs_label`) | máy không bịa nhãn; ảnh lên đầu hàng đợi (trọng số 10) |
+| POSSIBLE_MISSING | 53 / 52 ảnh | **người** | model lớn thấy vật mà nhãn không có; model có thể sai |
+| POSSIBLE_FALSE_POS | 29 / 27 ảnh | **người** | box nhãn không khớp vật nào model thấy |
+| POSSIBLE_LOOSE_BOX | 28 / 24 ảnh | **người** | đúng vật nhưng IoU < 0,5 |
+| POSSIBLE_WRONG_CLASS | 18 / 18 ảnh | **người** | model nói lớp khác với IoU ≥ 0,5 |
+| EMPTY_LABEL | 12 ảnh | **người** | file rỗng: ảnh nền hay quên gán? chỉ người biết |
+| BOX_TINY / BOX_HUGE | 6 / 4 ảnh; 3 / 3 ảnh | **người** | quy tắc guideline, có thể hợp lệ |
+| CLASS_RARE | 4 (cấp dataset) | máy (gián tiếp) | do ID lạ -1/4/7/93; hết sau khi xoá dòng BAD_CLASS_ID |
 
-TODO(học viên): vì sao `05_review_queue.csv` xếp ảnh đầu hàng như vậy? Với ngân sách 80 ảnh, người xem được bao nhiêu lỗi ngữ nghĩa?
+Máy tự sửa **35** thay đổi (`03_fixes.csv`): 20 `drop_line`, 8 `clip_box`, 1 `rename_classes`, 6 `needs_label`.
+
+**Thứ tự hàng đợi.** `05_review_queue.csv` xếp theo tổng trọng số cảnh báo của từng ảnh (`review.weights`): `NEEDS_LABEL` = 10, nên 6 ảnh chưa có nhãn nằm ngay đầu. Tiếp theo là ảnh có nhiều cảnh báo ngữ nghĩa nặng (WRONG_CLASS 3, MISSING 2, FALSE_POS 2…). Ảnh đứng đầu, img_0020, có điểm 11,5 vì dính cùng lúc FIXED_DROP_LINE + MISSING + WRONG_CLASS.
+
+**Người xem được bao nhiêu.** Sau khi máy sửa, có **123 cảnh báo ngữ nghĩa (POSSIBLE_*) trên 103 ảnh**. Ngân sách 80 ảnh phủ được **94/123 cảnh báo (76%), trên 74/103 ảnh**. Ảnh thứ 80 có điểm 3,34 và ảnh thứ 81 có 3,33, nên điểm cắt rơi đúng vào nhóm ảnh có một cảnh báo nặng. Sau khi duyệt, `07_error_list_v3` vẫn còn 57 cảnh báo ngữ nghĩa chưa ai xem.
 
 ## 3. Calibration (2 ngưỡng)
 | Tham số | Khởi đầu | Đã chọn | Precision / Recall (trước → sau) | Lý do (đánh đổi) |
@@ -38,12 +60,13 @@ Hai điểm mù:
 2. **Nhầm lớp mà model kém tự tin thì lọt.** So với `conf = 0.25`, ngưỡng 0.6 làm mất 3 cảnh báo WRONG_CLASS trên raw: img_0092 (model nói truck, conf 0,47), img_0124 (truck, 0,48), img_0180 (bus, 0,31). Ví dụ img_0101 cho thấy lỗi thật có thể nằm đúng trong vùng conf này. Ngay cả ở conf 0.1, recall WRONG_CLASS trên calib cũng chỉ 0.83 (5/6): khi model lớn cũng nhầm hoặc không thấy vật, pipeline không thể biết.
 
 ## 5. Train: raw vs clean (tùy chọn, chấm riêng)
-Chưa train: ghi "chưa chạy" và lý do, rồi bỏ qua phần còn lại của mục này. Nếu đã train: dán bảng từ `submission/results/comparison.md` (model, epoch, seed, số ảnh train mỗi biến thể).
-
-TODO(học viên): chênh mAP50 (clean − raw) so với **độ lệch chuẩn giữa các seed**; kết luận **trung thực** (nằm trong nhiễu thì nói là chưa kết luận được); ≥ 2 giả thuyết giải thích (ảnh trùng/rò rỉ test trong `raw`, nhãn máy còn lại trong `clean`, test chỉ 100 ảnh…) và cách kiểm.
+**Chưa chạy.** Tôi chọn chỉ làm phần lõi (`make check-core`) và không train trên Colab. Vì vậy báo cáo này **không** đưa ra kết luận nào về việc dữ liệu `clean` có giúp model tốt hơn `raw` hay không.
 
 ## 6. Quyết định và ghi chú AI
-TODO(học viên): (a) quyết định cuối; nếu Hold/Rework cần làm gì để thành Release?
+**(a) Quyết định cuối: HOLD**, chưa phát hành `clean_v1`. Tôi không đổi ngưỡng chỉ để đạt Release (với `conf = 0.8` sẽ ra Release, xem mục 3). Để thành Release:
+1. Người duyệt thêm khoảng 45 ảnh còn lại trong hàng đợi (125 − 80), ưu tiên 38 ảnh còn cảnh báo, để tỉ lệ ảnh còn cảnh báo xuống dưới 10% (tối đa 20/202 ảnh).
+2. Nếu ngân sách không tăng được thì giảm báo nhầm của `POSSIBLE_FALSE_POS` (precision trên calib chỉ 0,31), ví dụ chuẩn hoá lại guideline về vật bị che hoặc rất nhỏ. Việc này phải đi qua guideline dự án, không phải sửa ngưỡng cố định trong config.
+3. Chạy lại `make run` và chỉ phát hành khi gate trả về Release.
 
 **(b) Ghi chú AI.** Có dùng AI (Claude Code) để viết 4 module.
 - **Prompt chính:** Với mỗi module, tôi đưa AI đọc docstring của stub cùng file test tương ứng, `pipeline/common.py` và `configs/pipeline.yaml`. Tôi yêu cầu viết theo thứ tự label_format → gate → autofix → second_opinion, không viết cứng ngưỡng (lấy từ `cfg`), và chỉ sửa 4 file được phép.
